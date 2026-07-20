@@ -4,7 +4,7 @@ import { Chess } from 'chess.js';
 import { Brain, ChevronRight, CircleHelp, FlipVertical2, Lightbulb, LoaderCircle, RotateCcw, Settings, Sparkles, X } from 'lucide-react';
 import './styles.css';
 
-const PIECES = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚', P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔' };
+const PIECES = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚', P: '♟', N: '♞', B: '♝', R: '♜', Q: '♛', K: '♚' };
 const FILES = ['a','b','c','d','e','f','g','h'];
 const RANKS = ['8','7','6','5','4','3','2','1'];
 const START_FEN = new Chess().fen();
