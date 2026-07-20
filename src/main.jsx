@@ -106,24 +106,27 @@ function App() {
   const [previewLine, setPreviewLine] = useState(null);
   const [previewStep, setPreviewStep] = useState(0);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewDetachedFen, setPreviewDetachedFen] = useState(null);
+  const [previewManualMove, setPreviewManualMove] = useState(null);
   const [settings, setSettings] = useState(() => {
     try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('atelier64-settings')) }; } catch { return defaultSettings; }
   });
   const game = useMemo(() => new Chess(fen), [fen]);
-  const targets = selected ? game.moves({ square: selected, verbose: true }).map((m) => m.to) : [];
   const bestMove = showHint ? analysis[0]?.pv?.[0] : null;
   const lastMove = moves.at(-1)?.uci;
   const previewVariation = previewLine === null ? null : analysis[previewLine];
   const previewGame = useMemo(() => {
+    if (previewDetachedFen) return new Chess(previewDetachedFen);
     const replay = new Chess(fen);
     for (const move of previewVariation?.moves?.slice(0, previewStep) || []) {
       try { replay.move({ from: move.uci.slice(0, 2), to: move.uci.slice(2, 4), promotion: move.uci[4] || 'q' }); } catch { break; }
     }
     return replay;
-  }, [fen, previewVariation, previewStep]);
+  }, [fen, previewVariation, previewStep, previewDetachedFen]);
   const displayedGame = previewVariation ? previewGame : game;
-  const previewLastMove = previewVariation?.moves?.[previewStep - 1]?.uci;
-  const previewNextMove = previewVariation?.moves?.[previewStep]?.uci;
+  const targets = selected ? displayedGame.moves({ square: selected, verbose: true }).map((m) => m.to) : [];
+  const previewLastMove = previewDetachedFen ? previewManualMove : previewVariation?.moves?.[previewStep - 1]?.uci;
+  const previewNextMove = previewDetachedFen ? null : previewVariation?.moves?.[previewStep]?.uci;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -151,21 +154,25 @@ function App() {
   }, [previewPlaying, previewStep, previewVariation]);
 
   useEffect(() => {
-    setPreviewLine(null); setPreviewStep(0); setPreviewPlaying(false);
+    setPreviewLine(null); setPreviewStep(0); setPreviewPlaying(false); setPreviewDetachedFen(null); setPreviewManualMove(null);
   }, [fen]);
 
   function openVariation(index) {
-    setPreviewLine(index); setPreviewStep(1); setPreviewPlaying(true); setSelected(null);
+    setPreviewLine(index); setPreviewStep(0); setPreviewPlaying(false); setPreviewDetachedFen(null); setPreviewManualMove(null); setSelected(null);
   }
 
   function closeVariation() {
-    setPreviewLine(null); setPreviewStep(0); setPreviewPlaying(false);
+    setPreviewLine(null); setPreviewStep(0); setPreviewPlaying(false); setPreviewDetachedFen(null); setPreviewManualMove(null); setSelected(null);
   }
 
   function attemptMove(from, to) {
-    const next = new Chess(fen);
+    const next = new Chess(previewVariation ? displayedGame.fen() : fen);
     try {
       const move = next.move({ from, to, promotion: 'q' });
+      if (previewVariation) {
+        setPreviewDetachedFen(next.fen()); setPreviewManualMove(`${move.from}${move.to}${move.promotion || ''}`); setPreviewPlaying(false); setSelected(null);
+        return;
+      }
       setHistory([...history, { fen, moves }]);
       setMoves([...moves, { san: move.san, uci: `${move.from}${move.to}${move.promotion || ''}`, color: move.color }]);
       setFen(next.fen()); setSelected(null); setShowHint(true);
@@ -173,13 +180,13 @@ function App() {
   }
 
   function onSquare(square, draggedFrom) {
-    if (game.isGameOver()) return;
+    if (displayedGame.isGameOver()) return;
     if (draggedFrom) return attemptMove(draggedFrom, square);
     if (selected) {
       if (selected === square) return setSelected(null);
       if (targets.includes(square)) return attemptMove(selected, square);
     }
-    setSelected(game.get(square)?.color === game.turn() ? square : null);
+    setSelected(displayedGame.get(square)?.color === displayedGame.turn() ? square : null);
   }
 
   function undo() {
@@ -219,8 +226,8 @@ function App() {
         <div className="game-meta"><div><span className="eyebrow">PARTIE LIBRE · DEUX CÔTÉS</span><h1>{status}</h1></div><div className="turn-chip"><span className={game.turn() === 'w' ? 'mini-white' : 'mini-black'}/>{game.turn() === 'w' ? 'BLANCS' : 'NOIRS'}</div></div>
         <div className="board-area">
           <div className="eval-bar" aria-label="Évaluation"><span className="eval-number">{scoreLabel(rawScore)}</span><div className="eval-track"><div className="eval-white" style={{ height: `${whiteShare}%` }}/></div></div>
-          {previewVariation && <div className="preview-ribbon"><span>VARIANTE {String(previewLine + 1).padStart(2, '0')}</span><b>{previewStep}/{previewVariation.moves.length}</b><button onClick={closeVariation} aria-label="Fermer aperçu"><X size={15}/></button></div>}
-          <ChessBoard game={displayedGame} orientation={orientation} selected={previewVariation ? null : selected} targets={previewVariation ? [] : targets} bestMove={previewVariation ? previewNextMove : bestMove} lastMove={previewVariation ? previewLastMove : lastMove} onSquare={previewVariation ? () => {} : onSquare}/>
+          {previewVariation && <div className="preview-ribbon"><span>VARIANTE {String(previewLine + 1).padStart(2, '0')}</span><b>{previewDetachedFen ? 'EXPLORATION LIBRE' : `${previewStep}/${previewVariation.moves.length}`}</b><button onClick={closeVariation} aria-label="Fermer aperçu"><X size={15}/></button></div>}
+          <ChessBoard game={displayedGame} orientation={orientation} selected={selected} targets={targets} bestMove={previewVariation ? previewNextMove : bestMove} lastMove={previewVariation ? previewLastMove : lastMove} onSquare={onSquare}/>
         </div>
         <div className="board-actions">
           <button onClick={undo} disabled={!history.length}><RotateCcw size={17}/> Annuler</button>
@@ -240,10 +247,10 @@ function App() {
           <div className="section-label"><span>VARIANTES PRINCIPALES</span><span>ÉVAL.</span></div>
           {analysis.slice(0, 3).map((line, index) => <button type="button" className={`variation ${previewLine === index ? 'active' : ''}`} onClick={() => openVariation(index)} key={index} aria-label={`Voir variante ${index + 1} sur l'échiquier`}><span className="variation-number">{String(index + 1).padStart(2, '0')}</span><span className="variation-moves">{line.moves?.slice(0, 6).map((m, i) => <span key={i} className={i === 0 ? 'first-san' : ''}>{m.san} </span>)}</span><b>{scoreLabel(line.score)}</b></button>)}
           {previewVariation && <div className="variation-player">
-            <button onClick={() => { setPreviewPlaying(false); setPreviewStep(0); }} aria-label="Début variante"><SkipBack size={16}/></button>
-            <button className="player-main" onClick={() => { if (previewStep >= previewVariation.moves.length) setPreviewStep(0); setPreviewPlaying(!previewPlaying); }} aria-label={previewPlaying ? 'Pause' : 'Lecture'}>{previewPlaying ? <Pause size={17}/> : <Play size={17}/>}</button>
-            <button onClick={() => { setPreviewPlaying(false); setPreviewStep(Math.min(previewVariation.moves.length, previewStep + 1)); }} aria-label="Coup suivant"><SkipForward size={16}/></button>
-            <span>{previewStep ? previewVariation.moves[previewStep - 1]?.san : 'Position initiale'}</span>
+            <button onClick={() => { setPreviewPlaying(false); setPreviewStep(0); setPreviewDetachedFen(null); setPreviewManualMove(null); setSelected(null); }} aria-label="Début variante"><SkipBack size={16}/></button>
+            <button className="player-main" onClick={() => { setPreviewDetachedFen(null); setPreviewManualMove(null); setSelected(null); if (previewStep >= previewVariation.moves.length) setPreviewStep(0); setPreviewPlaying(!previewPlaying); }} aria-label={previewPlaying ? 'Pause' : 'Lecture'}>{previewPlaying ? <Pause size={17}/> : <Play size={17}/>}</button>
+            <button onClick={() => { setPreviewPlaying(false); setPreviewDetachedFen(null); setPreviewManualMove(null); setSelected(null); setPreviewStep(Math.min(previewVariation.moves.length, previewStep + 1)); }} aria-label="Coup suivant"><SkipForward size={16}/></button>
+            <span>{previewDetachedFen ? 'Exploration libre' : previewStep ? previewVariation.moves[previewStep - 1]?.san : 'En pause · premier coup indiqué'}</span>
             <button className="close-player" onClick={closeVariation}>Quitter</button>
           </div>}
         </section>
