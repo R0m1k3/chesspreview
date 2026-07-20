@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Chess } from 'chess.js';
-import { Brain, ChevronRight, CircleHelp, FlipVertical2, Lightbulb, LoaderCircle, Pause, Play, RotateCcw, Settings, SkipBack, SkipForward, Sparkles, X } from 'lucide-react';
+import { Brain, ChevronRight, CircleHelp, FlipVertical2, LayoutGrid, Lightbulb, LoaderCircle, Pause, Play, RotateCcw, Settings, SkipBack, SkipForward, Sparkles, Trash2, X } from 'lucide-react';
 import './styles.css';
+import { buildFen, positionFromGame } from './position.js';
 
 const PIECES = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚', P: '♟', N: '♞', B: '♝', R: '♜', Q: '♛', K: '♚' };
 const FILES = ['a','b','c','d','e','f','g','h'];
 const RANKS = ['8','7','6','5','4','3','2','1'];
 const START_FEN = new Chess().fen();
 const defaultSettings = { ollamaUrl: 'http://host.docker.internal:11434', model: 'qwen3:8b', depth: 16 };
+const POSITION_PRESETS = {
+  middlegame: 'r2q1rk1/pp2bppp/2npbn2/2p1p3/4P3/2NP1N2/PPQ1BPPP/R1B2RK1 w - - 0 10',
+  endgame: '8/5pk1/3p2p1/1p1P4/1P2P3/5P2/5KPP/8 w - - 0 32',
+};
 
 function scoreLabel(score) {
   if (!score) return '—';
@@ -90,6 +95,68 @@ function SettingsPanel({ value, onSave, onClose }) {
   </div>;
 }
 
+function PositionEditor({ fen, onApply, onClose }) {
+  const [position, setPosition] = useState(() => positionFromGame(new Chess(fen)));
+  const [turn, setTurn] = useState(() => new Chess(fen).turn());
+  const [tool, setTool] = useState('wq');
+  const [editorError, setEditorError] = useState('');
+  const palette = ['wk', 'wq', 'wr', 'wb', 'wn', 'wp', 'bk', 'bq', 'br', 'bb', 'bn', 'bp'];
+
+  function loadPreset(nextFen) {
+    const next = new Chess(nextFen);
+    setPosition(positionFromGame(next)); setTurn(next.turn()); setEditorError('');
+  }
+
+  function place(square) {
+    setPosition((current) => {
+      const next = { ...current };
+      if (tool === 'erase') delete next[square];
+      else next[square] = { color: tool[0], type: tool[1] };
+      return next;
+    });
+    setEditorError('');
+  }
+
+  function applyPosition() {
+    const pieces = Object.values(position);
+    if (pieces.filter((p) => p.type === 'k' && p.color === 'w').length !== 1 || pieces.filter((p) => p.type === 'k' && p.color === 'b').length !== 1) {
+      setEditorError('Placez exactement un roi blanc et un roi noir.'); return;
+    }
+    const candidate = buildFen(position, turn);
+    try { new Chess(candidate); onApply(candidate); }
+    catch { setEditorError('Position illégale. Vérifiez rois, pions et mises en échec.'); }
+  }
+
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <section className="position-editor" role="dialog" aria-modal="true" aria-label="Composer une position">
+      <div className="panel-heading"><div><span className="eyebrow">LABORATOIRE</span><h2>Composer une position</h2></div><button className="icon-button" onClick={onClose}><X size={20}/></button></div>
+      <div className="editor-layout">
+        <div className="editor-board" aria-label="Éditeur de position">
+          {RANKS.flatMap((rank) => FILES.map((file) => {
+            const square = `${file}${rank}`;
+            const piece = position[square];
+            const dark = (FILES.indexOf(file) + Number(rank)) % 2 === 1;
+            const code = piece ? (piece.color === 'w' ? piece.type.toUpperCase() : piece.type) : null;
+            return <button type="button" key={square} className={dark ? 'dark' : 'light'} onClick={() => place(square)} aria-label={`Placer sur ${square}`}>
+              {piece && <span className={`piece ${piece.color === 'w' ? 'white-piece' : 'black-piece'}`}>{PIECES[code]}</span>}
+            </button>;
+          }))}
+        </div>
+        <div className="editor-tools">
+          <div><span className="tool-label">PIÈCES</span><div className="piece-palette">{palette.map((item) => {
+            const code = item[0] === 'w' ? item[1].toUpperCase() : item[1];
+            return <button key={item} className={`${tool === item ? 'active' : ''} ${item[0] === 'w' ? 'palette-white' : 'palette-black'}`} onClick={() => setTool(item)} aria-label={`Sélectionner ${item}`}><span>{PIECES[code]}</span></button>;
+          })}</div></div>
+          <button className={`erase-tool ${tool === 'erase' ? 'active' : ''}`} onClick={() => setTool('erase')}><Trash2 size={16}/> Gomme</button>
+          <div><span className="tool-label">TRAIT</span><div className="turn-choice"><button className={turn === 'w' ? 'active' : ''} onClick={() => setTurn('w')}><i className="mini-white"/> Blancs</button><button className={turn === 'b' ? 'active' : ''} onClick={() => setTurn('b')}><i className="mini-black"/> Noirs</button></div></div>
+          <div><span className="tool-label">EXEMPLES</span><div className="preset-list"><button onClick={() => loadPreset(POSITION_PRESETS.middlegame)}>Milieu de partie</button><button onClick={() => loadPreset(POSITION_PRESETS.endgame)}>Finale</button><button onClick={() => { setPosition({}); setEditorError(''); }}>Vider plateau</button></div></div>
+        </div>
+      </div>
+      <div className="editor-footer"><p>{editorError || 'Choisissez côté au trait. Stockfish analysera position dès validation.'}</p><button className="primary" onClick={applyPosition}>Analyser cette position</button></div>
+    </section>
+  </div>;
+}
+
 function App() {
   const [fen, setFen] = useState(START_FEN);
   const [moves, setMoves] = useState([]);
@@ -103,6 +170,7 @@ function App() {
   const [explaining, setExplaining] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPositionEditor, setShowPositionEditor] = useState(false);
   const [previewLine, setPreviewLine] = useState(null);
   const [previewStep, setPreviewStep] = useState(0);
   const [previewPlaying, setPreviewPlaying] = useState(false);
@@ -197,6 +265,10 @@ function App() {
 
   function reset() { setFen(START_FEN); setMoves([]); setHistory([]); setSelected(null); setAnalysis([]); setExplanation(''); }
 
+  function loadComposedPosition(nextFen) {
+    setFen(nextFen); setMoves([]); setHistory([]); setSelected(null); setAnalysis([]); setExplanation(''); setShowPositionEditor(false); setShowHint(true);
+  }
+
   async function explain() {
     if (!analysis.length) return;
     setExplaining(true); setError('');
@@ -232,6 +304,7 @@ function App() {
         <div className="board-actions">
           <button onClick={undo} disabled={!history.length}><RotateCcw size={17}/> Annuler</button>
           <button onClick={() => setOrientation(orientation === 'white' ? 'black' : 'white')}><FlipVertical2 size={17}/> Retourner</button>
+          <button onClick={() => setShowPositionEditor(true)}><LayoutGrid size={17}/> Composer</button>
           <button onClick={reset}>Nouvelle partie</button>
         </div>
       </section>
@@ -266,6 +339,7 @@ function App() {
     </main>
     <footer><span>ATELIER 64</span><span>Les coups viennent de Stockfish · Les explications viennent de {settings.model}</span></footer>
     {showSettings && <SettingsPanel value={settings} onClose={() => setShowSettings(false)} onSave={(next) => { setSettings(next); localStorage.setItem('atelier64-settings', JSON.stringify(next)); setShowSettings(false); }}/>} 
+    {showPositionEditor && <PositionEditor fen={fen} onClose={() => setShowPositionEditor(false)} onApply={loadComposedPosition}/>} 
   </div>;
 }
 
