@@ -10,11 +10,13 @@ docker compose up --build
 
 Ouvrir <http://localhost:8080>. Stockfish est inclus dans l’image Docker.
 
-Dans **Réglages**, saisir adresse Ollama et modèle. Avec Ollama sur même ordinateur que Docker Desktop:
+L’adresse Ollama est fixée côté serveur par la variable `OLLAMA_URL` (par défaut `http://host.docker.internal:11434`, soit Ollama sur la machine hôte). Pour un Ollama distant, créer un fichier `.env` à côté de `docker-compose.yml`:
 
 ```text
-http://host.docker.internal:11434
+OLLAMA_URL=http://192.168.1.10:11434
 ```
+
+Dans **Réglages**, choisir le modèle et tester la connexion.
 
 Ollama doit écouter sur réseau accessible au conteneur. Exemple côté machine Ollama:
 
@@ -22,6 +24,12 @@ Ollama doit écouter sur réseau accessible au conteneur. Exemple côté machine
 OLLAMA_HOST=0.0.0.0:11434 ollama serve
 ollama pull qwen3:8b
 ```
+
+## Sécurité / variables
+
+- `OLLAMA_URL`: seule adresse Ollama contactée par le serveur; le navigateur ne peut plus en imposer une autre.
+- Analyses Stockfish limitées à `STOCKFISH_MAX_CONCURRENT` processus simultanés (défaut: 2, ou nombre de CPU si moindre), file d’attente de `STOCKFISH_MAX_QUEUE` (défaut 8) puis réponse 503.
+- Limite par IP et par minute: `ANALYZE_RATE_LIMIT` (défaut 60) pour `/api/analyze`, `OLLAMA_RATE_LIMIT` (défaut 20) pour les appels Ollama. Derrière un reverse proxy, définir `TRUST_PROXY=1` pour compter par IP réelle.
 
 ## Modèles conseillés
 
@@ -47,6 +55,6 @@ Interface: <http://localhost:5173>. API: <http://localhost:3000>.
 - meilleure flèche activable, 3 variantes, évaluation et profondeur réglable;
 - annulation, rotation, nouvelle partie, feuille de partie;
 - détection échec, mat et nulle;
-- Ollama distant configurable et testable depuis interface;
+- Ollama distant configurable (`OLLAMA_URL`) et testable depuis interface;
 - réglages conservés localement dans navigateur;
 - mise en page responsive et commandes accessibles au clavier.

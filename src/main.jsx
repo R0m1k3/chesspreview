@@ -9,7 +9,7 @@ const PIECES = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚', P: 
 const FILES = ['a','b','c','d','e','f','g','h'];
 const RANKS = ['8','7','6','5','4','3','2','1'];
 const START_FEN = new Chess().fen();
-const defaultSettings = { ollamaUrl: 'http://host.docker.internal:11434', model: 'qwen3:8b', depth: 16 };
+const defaultSettings = { model: 'qwen3:8b', depth: 16 };
 const POSITION_PRESETS = {
   middlegame: 'r2q1rk1/pp2bppp/2npbn2/2p1p3/4P3/2NP1N2/PPQ1BPPP/R1B2RK1 w - - 0 10',
   endgame: '8/5pk1/3p2p1/1p1P4/1P2P3/5P2/5KPP/8 w - - 0 32',
@@ -74,7 +74,7 @@ function SettingsPanel({ value, onSave, onClose }) {
   async function testConnection() {
     setStatus('loading');
     try {
-      const response = await fetch('/api/ollama/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: form.ollamaUrl }) });
+      const response = await fetch('/api/ollama/test', { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setModels(data.models);
@@ -84,8 +84,7 @@ function SettingsPanel({ value, onSave, onClose }) {
   return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
     <section className="settings-panel" role="dialog" aria-modal="true" aria-label="Réglages">
       <div className="panel-heading"><div><span className="eyebrow">CONNEXIONS</span><h2>Réglages du studio</h2></div><button className="icon-button" onClick={onClose}><X size={20}/></button></div>
-      <label>Adresse Ollama<input value={form.ollamaUrl} onChange={(e) => setForm({ ...form, ollamaUrl: e.target.value })} placeholder="http://192.168.1.10:11434" /></label>
-      <p className="field-note">Depuis Docker Desktop, <code>host.docker.internal</code> atteint Ollama installé sur cette machine.</p>
+      <p className="field-note">L’adresse Ollama est définie côté serveur (variable <code>OLLAMA_URL</code>, par défaut <code>http://host.docker.internal:11434</code>).</p>
       <label>Modèle<input list="model-list" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /><datalist id="model-list">{models.map((m) => <option key={m} value={m}/>)}</datalist></label>
       <div className="recommendation"><Sparkles size={17}/><span><strong>Conseil</strong> — qwen3:8b offre bon équilibre. qwen3:30b produit meilleures explications si machine distante possède ~24 Go de RAM/VRAM.</span></div>
       <label>Profondeur Stockfish <span>{form.depth}</span><input type="range" min="10" max="22" value={form.depth} onChange={(e) => setForm({ ...form, depth: Number(e.target.value) })}/></label>
@@ -273,7 +272,7 @@ function App() {
     if (!analysis.length) return;
     setExplaining(true); setError('');
     try {
-      const response = await fetch('/api/explain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: settings.ollamaUrl, model: settings.model, fen, lastMove: moves.at(-1)?.san, lines: analysis.map((l) => ({ score: l.score, line: l.moves?.map((m) => m.san) })) }) });
+      const response = await fetch('/api/explain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: settings.model, fen, lastMove: moves.at(-1)?.san, lines: analysis.map((l) => ({ score: l.score, line: l.moves?.map((m) => m.san) })) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setExplanation(data.explanation);

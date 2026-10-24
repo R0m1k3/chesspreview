@@ -9,6 +9,8 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - NODE_ENV=production
+      # Adresse du serveur Ollama (fixée côté serveur, non modifiable depuis l'interface).
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 30s
