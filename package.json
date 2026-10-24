@@ -10,15 +10,16 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "chess.js": "latest",
-    "express": "latest",
-    "lucide-react": "latest",
-    "vite": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "@vitejs/plugin-react": "^6.0.3",
+    "chess.js": "^1.4.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "lucide-react": "^1.25.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^8.1.5"
   },
   "devDependencies": {
-    "concurrently": "latest"
+    "concurrently": "^10.0.3"
   }
 }
